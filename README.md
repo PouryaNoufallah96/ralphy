@@ -38,7 +38,7 @@ That's it. Ralphy will work through each task autonomously.
 ## Requirements
 
 **Required:**
-- One of: [Claude Code CLI](https://github.com/anthropics/claude-code), [OpenCode CLI](https://opencode.ai/docs/), Codex CLI, or [Cursor](https://cursor.com) (with `agent` in PATH)
+- One of: [Claude Code CLI](https://github.com/anthropics/claude-code), [OpenCode CLI](https://opencode.ai/docs/), Codex CLI, [Cursor](https://cursor.com) (with `agent` in PATH), or [Factory Droid](https://docs.factory.ai/cli/getting-started/quickstart)
 - `jq` (for JSON parsing)
 
 **Optional:**
@@ -158,6 +158,7 @@ Example: "Add user authentication" becomes `ralphy/add-user-authentication`
 ./ralphy.sh --opencode   # OpenCode
 ./ralphy.sh --cursor     # Cursor agent
 ./ralphy.sh --qwen       # Qwen-Code
+./ralphy.sh --droid      # Factory Droid
 ```
 
 ### Engine Details
@@ -169,6 +170,7 @@ Example: "Add user authentication" becomes `ralphy/add-user-authentication`
 | Codex | `codex` | N/A | Token usage (if provided) |
 | Cursor | `agent` | `--force` | API duration (no token counts) |
 | Qwen-Code | `qwen` | `--approval-mode yolo` | Token usage (if provided) |
+| Droid | `droid exec` | `--auto medium` | API duration (no token counts) |
 
 **Note:** Cursor's CLI doesn't expose token usage, so Ralphy tracks total API duration instead.
 
@@ -182,6 +184,7 @@ Example: "Add user authentication" becomes `ralphy/add-user-authentication`
 | `--opencode` | Use OpenCode |
 | `--cursor`, `--agent` | Use Cursor agent |
 | `--qwen` | Use Qwen-Code |
+| `--droid` | Use Factory Droid |
 
 ### Task Source
 | Flag | Description |
@@ -248,6 +251,9 @@ Example: "Add user authentication" becomes `ralphy/add-user-authentication`
 # Use Qwen-Code
 ./ralphy.sh --qwen
 
+# Use Factory Droid
+./ralphy.sh --droid
+
 # Parallel with 4 agents and auto-PRs
 ./ralphy.sh --parallel --max-parallel 4 --create-pr
 
@@ -286,10 +292,14 @@ At completion, Ralphy shows different metrics depending on the AI engine:
 | OpenCode | Input/output tokens, actual cost |
 | Codex | Input/output tokens (if provided) |
 | Cursor | Total API duration (tokens not available) |
+| Droid | Total API duration (tokens not available) |
 
 All engines show branches created (if using `--branch-per-task`).
 
 ## Changelog
+
+### v3.3.0
+- Added Factory Droid support (`--droid` flag)
 
 ### v3.2.0
 - Added Qwen-Code support (`--qwen` flag)

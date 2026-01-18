@@ -1198,7 +1198,40 @@ notify_error() {
 build_prompt() {
   local task_override="${1:-}"
   local prompt=""
-  
+
+  # Add .ralphy/ config if available (works with PRD mode too)
+  if [[ -d "$RALPHY_DIR" ]]; then
+    # Add project context
+    local context
+    context=$(load_project_context)
+    if [[ -n "$context" ]]; then
+      prompt+="## Project Context
+$context
+
+"
+    fi
+
+    # Add rules
+    local rules
+    rules=$(load_ralphy_rules)
+    if [[ -n "$rules" ]]; then
+      prompt+="## Rules (you MUST follow these)
+$rules
+
+"
+    fi
+
+    # Add boundaries
+    local never_touch
+    never_touch=$(load_ralphy_boundaries "never_touch")
+    if [[ -n "$never_touch" ]]; then
+      prompt+="## Boundaries - Do NOT modify these files:
+$never_touch
+
+"
+    fi
+  fi
+
   # Add context based on PRD source
   case "$PRD_SOURCE" in
     markdown)
@@ -2628,7 +2661,10 @@ main() {
   esac
   echo "Engine: $engine_display"
   echo "Source: ${CYAN}$PRD_SOURCE${RESET} (${PRD_FILE:-$GITHUB_REPO})"
-  
+  if [[ -d "$RALPHY_DIR" ]]; then
+    echo "Config: ${GREEN}$RALPHY_DIR/${RESET} (rules loaded)"
+  fi
+
   local mode_parts=()
   [[ "$SKIP_TESTS" == true ]] && mode_parts+=("no-tests")
   [[ "$SKIP_LINT" == true ]] && mode_parts+=("no-lint")

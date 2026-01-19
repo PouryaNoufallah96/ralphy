@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export function Header() {
@@ -34,6 +35,13 @@ export function Header() {
             className="text-neutral-500 hover:text-neutral-800 underline"
           >
             github
+          </Link>
+          <Link
+            href="https://rasmic.link/discord"
+            target="_blank"
+            className="text-neutral-500 hover:text-neutral-800 underline"
+          >
+            discord
           </Link>
           <Link
             href="https://www.npmjs.com/package/ralphy-cli"

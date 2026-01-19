@@ -144,6 +144,7 @@ ralphy --branch-per-task --draft-pr     # + draft PRs
 ## Links
 
 - [GitHub](https://github.com/michaelshimeles/ralphy)
+- [Discord](https://rasmic.link/discord)
 - [Bash script version](https://github.com/michaelshimeles/ralphy#option-b-clone)
 
 ## License

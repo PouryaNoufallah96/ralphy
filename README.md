@@ -249,6 +249,10 @@ Branch naming: `ralphy/<task-slug>`
 ### v1.0.0
 - initial release
 
+## Community
+
+- [Discord](https://rasmic.link/discord)
+
 ## License
 
 MIT

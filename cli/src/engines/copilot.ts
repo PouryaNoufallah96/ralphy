@@ -61,6 +61,8 @@ export class CopilotEngine extends BaseAIEngine {
 	private parseOutput(output: string): string {
 		// Copilot CLI may output text responses
 		// Extract the meaningful response, filtering out control characters and prompts
+		// Note: These filter patterns are specific to current Copilot CLI behavior
+		// and may need updates if the CLI output format changes
 		const lines = output.split("\n").filter(Boolean);
 
 		// Filter out empty lines and common CLI artifacts
@@ -68,10 +70,10 @@ export class CopilotEngine extends BaseAIEngine {
 			const trimmed = line.trim();
 			return (
 				trimmed &&
-				!trimmed.startsWith("?") &&
-				!trimmed.startsWith("❯") &&
-				!trimmed.includes("Thinking...") &&
-				!trimmed.includes("Working on it...")
+				!trimmed.startsWith("?") && // Interactive prompts
+				!trimmed.startsWith("❯") && // Command prompts
+				!trimmed.includes("Thinking...") && // Status messages
+				!trimmed.includes("Working on it...") // Status messages
 			);
 		});
 

@@ -50,7 +50,8 @@ async function sendDiscordNotification(
 	});
 
 	if (!response.ok) {
-		throw new Error(`Discord webhook failed: ${response.status}`);
+		const text = await response.text().catch(() => "");
+		throw new Error(`Discord webhook failed: ${response.status}${text ? ` - ${text}` : ""}`);
 	}
 }
 

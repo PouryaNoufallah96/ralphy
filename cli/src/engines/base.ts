@@ -9,13 +9,17 @@ const isWindows = process.platform === "win32";
  * Resolve a command to its full executable path (needed for Windows)
  */
 function resolveCommand(command: string): string {
-	if (!isWindows || isBun) return command;
+	if (!isWindows) return command;
 	try {
 		const result = spawnSync("where", [command], { encoding: "utf8", stdio: "pipe" });
 		if (result.status !== 0) return command;
 		const paths = result.stdout.trim().split(/\r?\n/);
-		// Return first path (the one that would be executed)
-		return paths[0] || command;
+		// Prefer .cmd files over .ps1 since Bun cannot spawn .ps1 directly
+		const cmdPath = paths.find((p) => p.toLowerCase().endsWith(".cmd"));
+		if (cmdPath) return cmdPath;
+		// Fall back to first non-.ps1 path, or first path if all are .ps1
+		const nonPs1Path = paths.find((p) => !p.toLowerCase().endsWith(".ps1"));
+		return nonPs1Path || paths[0] || command;
 	} catch {
 		return command;
 	}
@@ -53,7 +57,8 @@ export async function execCommand(
 	env?: Record<string, string>,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
 	if (isBun) {
-		const proc = Bun.spawn([command, ...args], {
+		const resolvedCommand = resolveCommand(command);
+		const proc = Bun.spawn([resolvedCommand, ...args], {
 			cwd: workDir,
 			stdout: "pipe",
 			stderr: "pipe",
@@ -186,7 +191,8 @@ export async function execCommandStreaming(
 	env?: Record<string, string>,
 ): Promise<{ exitCode: number }> {
 	if (isBun) {
-		const proc = Bun.spawn([command, ...args], {
+		const resolvedCommand = resolveCommand(command);
+		const proc = Bun.spawn([resolvedCommand, ...args], {
 			cwd: workDir,
 			stdout: "pipe",
 			stderr: "pipe",

@@ -1,57 +1,125 @@
-import {
-	BaseAIEngine,
-	checkForErrors,
-	detectStepFromOutput,
-	execCommand,
-	execCommandStreaming,
-	formatCommandError,
-} from "./base.ts";
-import type { AIResult, EngineOptions, ProgressCallback } from "./types.ts";
+import { spawnSync } from "node:child_process";
+import { logDebug } from "../ui/logger.ts";
+import { BaseAIEngine, checkForErrors, formatCommandError } from "./base.ts";
+import type { AIResult, EngineOptions } from "./types.ts";
+
+const isWindows = process.platform === "win32";
 
 /**
  * GitHub Copilot CLI AI Engine
+ *
+ * Note: This engine intentionally does NOT implement executeStreaming
+ * because Copilot CLI has issues with streaming output on Windows.
+ * Using the non-streaming execute() method produces more reliable results.
+ *
+ * Uses spawnSync instead of async spawn to avoid hanging issues on Windows.
  */
 export class CopilotEngine extends BaseAIEngine {
 	name = "GitHub Copilot";
 	cliCommand = "copilot";
 
 	/**
-	 * Build command arguments for Copilot CLI
+	 * Sanitize prompt for Windows cmd.exe
+	 * On Windows, prompts with special characters need careful handling
 	 */
-	private buildArgs(
-		prompt: string,
-		options?: EngineOptions,
-	): { args: string[] } {
-		const args: string[] = [];
-
-		// Required for non-interactive mode: allow all tools to run without confirmation
-		args.push("--allow-all-tools");
-
-		// Pass prompt directly as argument (Copilot CLI requires -p with value, not stdin)
-		args.push("-p", prompt);
-
-		if (options?.modelOverride) {
-			args.push("--model", options.modelOverride);
+	private sanitizePromptForWindows(prompt: string): string {
+		if (!isWindows) {
+			return prompt;
 		}
-		// Add any additional engine-specific arguments
-		if (options?.engineArgs && options.engineArgs.length > 0) {
-			args.push(...options.engineArgs);
-		}
-		return { args };
+
+		// On Windows, we need to handle special characters
+		// Replace actual newlines with space for readability
+		let sanitized = prompt;
+		sanitized = sanitized.replace(/\r\n/g, " ").replace(/\n/g, " ");
+
+		// Escape double quotes by doubling them (cmd.exe convention)
+		// Since we'll wrap the whole prompt in quotes, internal quotes need to be escaped
+		sanitized = sanitized.replace(/"/g, '""');
+
+		return sanitized;
 	}
 
 	async execute(prompt: string, workDir: string, options?: EngineOptions): Promise<AIResult> {
-		const { args } = this.buildArgs(prompt, options);
+		// Debug logging
+		logDebug(`[Copilot] Working directory: ${workDir}`);
+		logDebug(`[Copilot] Prompt length: ${prompt.length} chars`);
+		logDebug(`[Copilot] Prompt preview: ${prompt.substring(0, 200)}...`);
 
 		const startTime = Date.now();
-		const { stdout, stderr, exitCode } = await execCommand(
-			this.cliCommand,
-			args,
-			workDir,
-		);
+
+		// Use spawnSync to avoid hanging issues with Bun.spawn on Windows
+		// The Copilot CLI seems to not close its streams properly which causes
+		// async stream reading to hang indefinitely
+		let result;
+
+		if (isWindows) {
+			// On Windows with shell: true, we need to build the command as a single string
+			// with proper quoting to avoid argument splitting
+			const sanitizedPrompt = this.sanitizePromptForWindows(prompt);
+
+			// Build optional args
+			const extraArgs: string[] = [];
+			if (options?.modelOverride) {
+				extraArgs.push("--model", options.modelOverride);
+			}
+			if (options?.engineArgs && options.engineArgs.length > 0) {
+				extraArgs.push(...options.engineArgs);
+			}
+
+			// Build the full command string with the prompt in quotes
+			const extraArgsStr = extraArgs.length > 0 ? ` ${extraArgs.join(" ")}` : "";
+			const fullCommand = `${this.cliCommand} --yolo -p "${sanitizedPrompt}"${extraArgsStr}`;
+
+			logDebug(`[Copilot] Command (first 300 chars): ${fullCommand.substring(0, 300)}...`);
+
+			result = spawnSync(fullCommand, [], {
+				cwd: workDir,
+				encoding: "utf-8",
+				shell: true, // Required on Windows for .cmd wrappers
+				timeout: 5 * 60 * 1000, // 5 minute timeout
+				maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+			});
+		} else {
+			// On Unix, we can pass args as an array without shell
+			const args: string[] = ["--yolo", "-p", prompt];
+			if (options?.modelOverride) {
+				args.push("--model", options.modelOverride);
+			}
+			if (options?.engineArgs && options.engineArgs.length > 0) {
+				args.push(...options.engineArgs);
+			}
+
+			result = spawnSync(this.cliCommand, args, {
+				cwd: workDir,
+				encoding: "utf-8",
+				timeout: 5 * 60 * 1000, // 5 minute timeout
+				maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+			});
+		}
+
 		const durationMs = Date.now() - startTime;
 
+		const stdout = result.stdout || "";
+		const stderr = result.stderr || "";
+		const exitCode = result.status ?? 1;
 		const output = stdout + stderr;
+
+		// Debug logging
+		logDebug(`[Copilot] Exit code: ${exitCode}`);
+		logDebug(`[Copilot] Duration: ${durationMs}ms`);
+		logDebug(`[Copilot] Output length: ${output.length} chars`);
+		logDebug(`[Copilot] Output preview: ${output.substring(0, 500)}...`);
+
+		// Check for timeout
+		if (result.signal === "SIGTERM") {
+			return {
+				success: false,
+				response: "",
+				inputTokens: 0,
+				outputTokens: 0,
+				error: "Copilot CLI timed out after 5 minutes",
+			};
+		}
 
 		// Check for JSON errors (from base)
 		const jsonError = checkForErrors(output);
@@ -158,79 +226,7 @@ export class CopilotEngine extends BaseAIEngine {
 		return meaningfulLines.join("\n") || "Task completed";
 	}
 
-	async executeStreaming(
-		prompt: string,
-		workDir: string,
-		onProgress: ProgressCallback,
-		options?: EngineOptions,
-	): Promise<AIResult> {
-		const { args } = this.buildArgs(prompt, options);
-
-		const outputLines: string[] = [];
-		const startTime = Date.now();
-
-		const { exitCode } = await execCommandStreaming(
-			this.cliCommand,
-			args,
-			workDir,
-			(line) => {
-				outputLines.push(line);
-
-				// Detect and report step changes
-				const step = detectStepFromOutput(line);
-				if (step) {
-					onProgress(step);
-				}
-			},
-		);
-
-		const durationMs = Date.now() - startTime;
-		const output = outputLines.join("\n");
-
-		// Check for JSON errors (from base)
-		const jsonError = checkForErrors(output);
-		if (jsonError) {
-			return {
-				success: false,
-				response: "",
-				inputTokens: 0,
-				outputTokens: 0,
-				error: jsonError,
-			};
-		}
-
-		// Check for Copilot-specific errors (plain text)
-		const copilotError = this.checkCopilotErrors(output);
-		if (copilotError) {
-			return {
-				success: false,
-				response: "",
-				inputTokens: 0,
-				outputTokens: 0,
-				error: copilotError,
-			};
-		}
-
-		// Parse Copilot output
-		const response = this.parseOutput(output);
-
-		// If command failed with non-zero exit code, provide a meaningful error
-		if (exitCode !== 0) {
-			return {
-				success: false,
-				response,
-				inputTokens: 0,
-				outputTokens: 0,
-				error: formatCommandError(exitCode, output),
-			};
-		}
-
-		return {
-			success: true,
-			response,
-			inputTokens: 0,
-			outputTokens: 0,
-			cost: durationMs > 0 ? `duration:${durationMs}` : undefined,
-		};
-	}
+	// Note: executeStreaming is intentionally NOT implemented for Copilot
+	// because it has reliability issues on Windows with complex prompts.
+	// The base execute() method is more reliable.
 }

@@ -4,6 +4,7 @@ import {
 	execCommand,
 	formatCommandError,
 } from "./base.ts";
+import { logDebug } from "../ui/logger.ts";
 import type { AIResult, EngineOptions } from "./types.ts";
 
 const isWindows = process.platform === "win32";
@@ -74,11 +75,23 @@ export class CopilotEngine extends BaseAIEngine {
 	async execute(prompt: string, workDir: string, options?: EngineOptions): Promise<AIResult> {
 		const { args } = this.buildArgs(prompt, options);
 
+		// Debug logging
+		logDebug(`[Copilot] Working directory: ${workDir}`);
+		logDebug(`[Copilot] Prompt length: ${prompt.length} chars`);
+		logDebug(`[Copilot] Prompt preview: ${prompt.substring(0, 200)}...`);
+		logDebug(`[Copilot] Command: ${this.cliCommand} ${args.join(" ").substring(0, 300)}...`);
+
 		const startTime = Date.now();
 		const { stdout, stderr, exitCode } = await execCommand(this.cliCommand, args, workDir);
 		const durationMs = Date.now() - startTime;
 
 		const output = stdout + stderr;
+
+		// Debug logging
+		logDebug(`[Copilot] Exit code: ${exitCode}`);
+		logDebug(`[Copilot] Duration: ${durationMs}ms`);
+		logDebug(`[Copilot] Output length: ${output.length} chars`);
+		logDebug(`[Copilot] Output preview: ${output.substring(0, 500)}...`);
 
 		// Check for JSON errors (from base)
 		const jsonError = checkForErrors(output);

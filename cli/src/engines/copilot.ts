@@ -43,7 +43,7 @@ export class CopilotEngine extends BaseAIEngine {
 				.replace(/</g, "^<") // Escape less-than
 				.replace(/>/g, "^>") // Escape greater-than
 				.replace(/\|/g, "^|") // Escape pipes
-				.replace(/"/g, '\\"'); // Escape double quotes with backslash
+				.replace(/"/g, '""'); // Escape double quotes by doubling
 		}
 
 		return sanitized;

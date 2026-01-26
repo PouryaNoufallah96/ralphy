@@ -134,8 +134,8 @@ export function isFatalError(error: string): boolean {
 		/invalid.*token/i,
 		/invalid.*api.?key/i,
 		/unauthorized/i,
-		/401/,
-		/403/,
+		/\b401\b/i,
+		/\b403\b/i,
 		/command not found/i,
 		/not installed/i,
 		/is not recognized/i, // Windows "command not recognized"

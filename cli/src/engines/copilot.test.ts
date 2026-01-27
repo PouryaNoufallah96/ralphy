@@ -404,6 +404,52 @@ model-name 500 in, 300 out, 100 cached`,
 
 			spy.mockRestore();
 		});
+
+		it("should not filter user content that mentions token formats", async () => {
+			// This tests that the token count line filter is specific enough
+			// to not accidentally filter valid response content about tokens
+			const spy = spyOn(baseModule, "execCommand").mockResolvedValue({
+				stdout: `Here's how token counting works:
+The model uses 17.5k in tokens for context
+You can see "500 in, 300 out" format in logs
+gpt-4 1000 in, 500 out, 200 cached
+Actual stats line filtered below:
+model-name 100 in, 50 out, 25 cached`,
+				stderr: "",
+				exitCode: 0,
+			});
+
+			const result = await engine.execute("test", testWorkDir);
+
+			// Lines mentioning tokens without the full stats format should be preserved
+			expect(result.response).toContain("token counting works");
+			expect(result.response).toContain("17.5k in tokens for context");
+			expect(result.response).toContain('"500 in, 300 out" format');
+			// The actual stats line should be filtered
+			expect(result.response).not.toContain("100 in, 50 out, 25 cached");
+
+			spy.mockRestore();
+		});
+
+		it("should filter token count stats lines with various model names", async () => {
+			const spy = spyOn(baseModule, "execCommand").mockResolvedValue({
+				stdout: `Response content here
+gpt-4-turbo 17.5k in, 2.3k out, 1k cached
+claude-3-opus 500 in, 300 out, 100 cached
+o1-preview 1.5m in, 0.5m out, 0.1m cached`,
+				stderr: "",
+				exitCode: 0,
+			});
+
+			const result = await engine.execute("test", testWorkDir);
+
+			expect(result.response).toBe("Response content here");
+			expect(result.response).not.toContain("gpt-4-turbo");
+			expect(result.response).not.toContain("claude-3-opus");
+			expect(result.response).not.toContain("o1-preview");
+
+			spy.mockRestore();
+		});
 	});
 
 	describe("Error Handling", () => {
